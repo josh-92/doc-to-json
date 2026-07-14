@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Groq = require("groq-sdk");
 
 exports.handler = async (event, context) => {
     if (event.httpMethod !== 'POST') {
@@ -7,22 +7,37 @@ exports.handler = async (event, context) => {
 
     try {
         const { docText } = JSON.parse(event.body);
-        if (!docText) throw new Error("No document text was sent.");
+        if (!docText) throw new Error("No document text provided.");
 
-        const apiKey = process.env.GOOGLE_API_KEY;
-        const genAI = new GoogleGenerativeAI(apiKey);
-        
-        // Use 1.5-flash if you are strictly on the Free Tier to avoid 429s
-        // If you need 2.0-flash, you MUST enable billing in Google AI Studio
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        // Use the new variable name
+        const apiKey = process.env.GROQ_API_KEY; 
+        if (!apiKey) throw new Error("GROQ_API_KEY is not set in Netlify settings!");
 
-        const prompt = `Convert the following text to a JSON array of questions:
-        [{"question": "...", "options": ["A", "B", "C", "D"], "answer": "..."}]
-        Text: ${docText}`;
+        const groq = new Groq({ apiKey: apiKey });
 
-        const result = await model.generateContent(prompt);
-        let output = result.response.text();
-        output = output.replace(/```json/g, '').replace(/```/g, '').trim();
+        const prompt = `You are an expert exam converter. Convert this raw text into a valid JSON array of question objects.
+
+Schema required:
+[
+  {
+    "question": "Exact question text",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "answer": "Exact text of correct option"
+  }
+]
+
+Raw text to convert:
+${docText}`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" } 
+        });
+
+        // The response format from Groq with JSON object mode is a bit different
+        // It returns a JSON string in the content
+        const output = chatCompletion.choices[0].message.content;
 
         return {
             statusCode: 200,
@@ -31,18 +46,11 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error("Backend Error:", error.message);
-        
-        // Specifically detect Quota limits
-        const status = error.message.includes("429") ? 429 : 500;
-        const message = error.message.includes("429") 
-            ? "API Quota exceeded. Please enable billing in Google AI Studio or wait." 
-            : error.message;
-
+        console.error("Groq Error:", error);
         return {
-            statusCode: status,
+            statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: message })
+            body: JSON.stringify({ error: error.message })
         };
     }
 };
