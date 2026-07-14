@@ -15,15 +15,14 @@ exports.handler = async (event, context) => {
         const groq = new Groq({ apiKey: apiKey });
 
         const prompt = `
-        You are an expert Educational Content Engineer. Parse the provided exam text into a strict JSON structure.
+        You are an expert Educational Content Engineer. Parse the provided exam text into a strict JSON ARRAY.
         
         CRITICAL MATH INSTRUCTIONS:
         - Preserve ALL mathematical symbols, equations, and LaTeX format (e.g., $t^2$, $\\sqrt{x}$, etc.) exactly as written. 
-        - Do not strip characters or attempt to simplify/explain the math. Keep the original text for the "question_text".
 
         JSON STRUCTURE RULES:
-        - Return an object with a key "questions" which is an array.
-        - Each object MUST follow this specific key structure:
+        - Return ONLY a JSON array [ ... ]. Do NOT wrap it in any object.
+        - Each item in the array MUST have exactly these keys:
           "question_number": (Integer)
           "paragraph_text": (String, or empty string if standalone)
           "question_text": (String, including all original math formatting)
@@ -33,7 +32,7 @@ exports.handler = async (event, context) => {
           "option_d": (String)
           "correct_answer": (String: 'a', 'b', 'c', or 'd' ONLY)
         
-        Return ONLY valid JSON.
+        Return ONLY the raw JSON array string. No preamble, no explanation.
         
         Exam text to parse:
         ${docText}
@@ -42,15 +41,18 @@ exports.handler = async (event, context) => {
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
             model: "llama-3.3-70b-versatile",
-            response_format: { type: "json_object" },
+            // We removed response_format to allow for a root-level Array
             temperature: 0.1
         });
 
-        // The response body is the JSON string
+        // Clean any potential markdown wrapping
+        let output = chatCompletion.choices[0].message.content;
+        output = output.replace(/```json/g, '').replace(/```/g, '').trim();
+
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: chatCompletion.choices[0].message.content
+            body: output
         };
 
     } catch (error) {
