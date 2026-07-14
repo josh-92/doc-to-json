@@ -17,26 +17,23 @@ exports.handler = async (event, context) => {
         const prompt = `
         You are an expert Educational Content Engineer. Parse the provided exam text into a strict JSON structure.
         
-        RULES:
-        1. If the text has reading passages, include the full text of the passage in the "passage" field. If the question is standalone, set "passage" to null.
-        2. Assign a sequential "id" to every question.
-        3. Options MUST be a key-value object where keys are "A", "B", "C", "D".
-        4. "correctOption" should only be the letter (e.g., "A").
-        5. Return ONLY valid JSON.
+        CRITICAL MATH INSTRUCTIONS:
+        - Preserve ALL mathematical symbols, equations, and LaTeX format (e.g., $t^2$, $\\sqrt{x}$, etc.) exactly as written. 
+        - Do not strip characters or attempt to simplify/explain the math. Keep the original text for the "question_text".
+
+        JSON STRUCTURE RULES:
+        - Return an object with a key "questions" which is an array.
+        - Each object MUST follow this specific key structure:
+          "question_number": (Integer)
+          "paragraph_text": (String, or empty string if standalone)
+          "question_text": (String, including all original math formatting)
+          "option_a": (String)
+          "option_b": (String)
+          "option_c": (String)
+          "option_d": (String)
+          "correct_answer": (String: 'a', 'b', 'c', or 'd' ONLY)
         
-        Schema:
-        {
-          "examTitle": "String",
-          "questions": [
-            {
-              "id": Number,
-              "passage": "String or null",
-              "questionText": "String",
-              "options": { "A": "String", "B": "String", "C": "String", "D": "String" },
-              "correctOption": "A" | "B" | "C" | "D"
-            }
-          ]
-        }
+        Return ONLY valid JSON.
         
         Exam text to parse:
         ${docText}
@@ -49,6 +46,7 @@ exports.handler = async (event, context) => {
             temperature: 0.1
         });
 
+        // The response body is the JSON string
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
