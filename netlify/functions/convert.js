@@ -15,27 +15,41 @@ exports.handler = async (event, context) => {
         const groq = new Groq({ apiKey: apiKey });
 
         const prompt = `
-        You are an expert Educational Content Engineer. Parse the provided exam text into a strict JSON ARRAY.
-        
-        CRITICAL MATH INSTRUCTIONS:
-        - Preserve ALL mathematical symbols, equations, and LaTeX format (e.g., $t^2$, $\\sqrt{x}$, etc.) exactly as written. 
+        You are an expert Exam Parsing Engine. Your goal is to convert exam text into a flat JSON array.
 
-        JSON STRUCTURE RULES:
-        - Return ONLY a JSON array [ ... ]. Do NOT wrap it in any object.
-        - Each item in the array MUST have exactly these keys:
-          "question_number": (Integer)
-          "paragraph_text": (String, or empty string if standalone)
-          "question_text": (String, including all original math formatting)
-          "option_a": (String)
-          "option_b": (String)
-          "option_c": (String)
-          "option_d": (String)
-          "correct_answer": (String: 'a', 'b', 'c', or 'd' ONLY)
-        
-        Return ONLY the raw JSON array string. No preamble, no explanation.
-        
-        Exam text to parse:
-        ${docText}
+RULES FOR CLASSIFICATION:
+1. If the text block is a reading passage (contains multiple sentences, introduces a topic, has no options), categorize it as "type": "passage".
+   - Use "id": "I", "II", "III", etc. for these.
+   - Combine all paragraphs of the passage into a single "content" string. Use \n\n to denote paragraph breaks inside that string.
+2. If the text block is a question (has a number, question text, and A/B/C/D options), categorize it as "type": "question".
+
+JSON STRUCTURE RULES:
+- Return ONLY a JSON array [ ... ].
+- Structure for "passage" objects:
+  {
+    "type": "passage",
+    "id": "I", 
+    "content": "Full text here..."
+  }
+- Structure for "question" objects:
+  {
+    "type": "question",
+    "question_number": (Integer),
+    "question_text": "Text including $t^2$ math notation",
+    "option_a": "...",
+    "option_b": "...",
+    "option_c": "...",
+    "option_d": "...",
+    "correct_answer": "a" (or b, c, d)
+  }
+
+IMPORTANT:
+- Keep the array order exactly as it appears in the source document.
+- Do not add section wrapper objects.
+- Preserve all LaTeX/math symbols ($...$) exactly.
+
+Exam text to parse:
+${docText}
         `;
 
         const chatCompletion = await groq.chat.completions.create({
