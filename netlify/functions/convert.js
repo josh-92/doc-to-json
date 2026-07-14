@@ -14,7 +14,11 @@ exports.handler = async (event, context) => {
 
         // Initialize the official Google SDK
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
+        // FIX: Specifying model with the stable v1 API path
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-1.5-flash"
+        });
 
         const prompt = `You are an expert exam converter. Convert the following raw text extracted from an exam document into a clean, well-structured JSON array of question objects. 
 
@@ -31,6 +35,7 @@ Return ONLY valid JSON. No markdown, no backticks.
 Raw exam text:
 ${docText}`;
 
+        // Call the API
         const result = await model.generateContent(prompt);
         let output = result.response.text();
         
