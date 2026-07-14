@@ -24,7 +24,7 @@ RULES FOR CLASSIFICATION:
    - Use "id": "I", "II", "III", etc. (Roman Numerals) for these.
    - Combine all paragraphs of the passage into a single "content" string. Use \\n\\n for paragraph breaks.
 2. If the text block is a question (has a number, text, and A/B/C/D options), categorize it as "type": "question".
-
+3. For questions, set "type": "question", "question_number": X (use the number from the text).
 JSON STRUCTURE REQUIRED:
 {
   "questions": [
@@ -35,6 +35,7 @@ JSON STRUCTURE REQUIRED:
     },
     {
       "type": "question",
+      "question_number": 1,
       "question_text": "Exact text of the question, preserving all LaTeX/math symbols (e.g. $t^2$) exactly.",
       "option_a": "Option A text",
       "option_b": "Option B text",
@@ -50,6 +51,7 @@ IMPORTANT:
 - Keep the array order exactly as it appears in the source document.
 - Preserve all LaTeX/math symbols ($...$) exactly.
 - Return ONLY valid JSON.
+- Ensure every question object has the "question_number" field.
 
 Raw exam text:
 ${docText}
