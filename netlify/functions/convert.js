@@ -14,8 +14,10 @@ exports.handler = async (event, context) => {
 
         const groq = new Groq({ apiKey: apiKey });
 
+        // Notice the JSON STRUCTURE requires a wrapper object {"questions": [...]} 
+        // because response_format: { type: "json_object" } strictly requires a root object.
         const prompt = `
-        You are an expert Exam Parsing Engine. Convert the following raw exam text into a strict JSON array.
+        You are an expert Exam Parsing Engine. Convert the following raw exam text into a strict JSON format.
 
 RULES FOR CLASSIFICATION:
 1. If the text block is a reading passage (a block of text meant to be read before answering questions, no options), categorize it as "type": "passage".
@@ -24,32 +26,34 @@ RULES FOR CLASSIFICATION:
 2. If the text block is a question (has a number, text, and A/B/C/D options), categorize it as "type": "question".
 
 JSON STRUCTURE REQUIRED:
-[
-  {
-    "type": "passage",
-    "id": "I",
-    "content": "Full text of the passage here..."
-  },
-  {
-    "type": "question",
-    "question_text": "Exact text of the question, preserving all LaTeX/math symbols (e.g. $t^2$) exactly.",
-    "option_a": "Option A text",
-    "option_b": "Option B text",
-    "option_c": "Option C text",
-    "option_d": "Option D text",
-    "correct_answer": "a" (or b, c, d)
-  }
-    ]
+{
+  "questions": [
+    {
+      "type": "passage",
+      "id": "I",
+      "content": "Full text of the passage here..."
+    },
+    {
+      "type": "question",
+      "question_text": "Exact text of the question, preserving all LaTeX/math symbols (e.g. $t^2$) exactly.",
+      "option_a": "Option A text",
+      "option_b": "Option B text",
+      "option_c": "Option C text",
+      "option_d": "Option D text",
+      "correct_answer": "a"
+    }
+  ]
+}
 
 IMPORTANT:
+- Assign 'a', 'b', 'c', or 'd' to correct_answer (lowercase).
 - Keep the array order exactly as it appears in the source document.
-- Do not add section wrapper objects.
 - Preserve all LaTeX/math symbols ($...$) exactly.
--Return ONLY valid JSON array. No markdown, no wrappers.
--Raw exam text:
+- Return ONLY valid JSON.
 
-
-${docText} `;
+Raw exam text:
+${docText}
+        `;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
@@ -58,11 +62,17 @@ ${docText} `;
             temperature: 0.1
         });
 
-        // The response body is the JSON string
+        // Parse Groq's output
+        const rawOutput = chatCompletion.choices[0].message.content;
+        const parsedJson = JSON.parse(rawOutput);
+        
+        // Extract the array to send back a flat list to the frontend
+        const questionsArray = parsedJson.questions || [];
+
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: chatCompletion.choices[0].message.content
+            body: JSON.stringify(questionsArray)
         };
 
     } catch (error) {
