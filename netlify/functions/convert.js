@@ -15,42 +15,41 @@ exports.handler = async (event, context) => {
         const groq = new Groq({ apiKey: apiKey });
 
         const prompt = `
-        You are an expert Exam Parsing Engine. Your goal is to convert exam text into a flat JSON array.
+        You are an expert Exam Parsing Engine. Convert the following raw exam text into a strict JSON array.
 
 RULES FOR CLASSIFICATION:
-1. If the text block is a reading passage (contains multiple sentences, introduces a topic, has no options), categorize it as "type": "passage".
-   - Use "id": "I", "II", "III", etc. for these.
-   - Combine all paragraphs of the passage into a single "content" string. Use \n\n to denote paragraph breaks inside that string.
-2. If the text block is a question (has a number, question text, and A/B/C/D options), categorize it as "type": "question".
+1. If the text block is a reading passage (a block of text meant to be read before answering questions, no options), categorize it as "type": "passage".
+   - Use "id": "I", "II", "III", etc. (Roman Numerals) for these.
+   - Combine all paragraphs of the passage into a single "content" string. Use \\n\\n for paragraph breaks.
+2. If the text block is a question (has a number, text, and A/B/C/D options), categorize it as "type": "question".
 
-JSON STRUCTURE RULES:
-- Return ONLY a JSON array [ ... ].
-- Structure for "passage" objects:
+JSON STRUCTURE REQUIRED:
+[
   {
     "type": "passage",
-    "id": "I", 
-    "content": "Full text here..."
-  }
-- Structure for "question" objects:
+    "id": "I",
+    "content": "Full text of the passage here..."
+  },
   {
     "type": "question",
-    "question_number": (Integer),
-    "question_text": "Text including $t^2$ math notation",
-    "option_a": "...",
-    "option_b": "...",
-    "option_c": "...",
-    "option_d": "...",
+    "question_text": "Exact text of the question, preserving all LaTeX/math symbols (e.g. $t^2$) exactly.",
+    "option_a": "Option A text",
+    "option_b": "Option B text",
+    "option_c": "Option C text",
+    "option_d": "Option D text",
     "correct_answer": "a" (or b, c, d)
   }
+    ]
 
 IMPORTANT:
 - Keep the array order exactly as it appears in the source document.
 - Do not add section wrapper objects.
 - Preserve all LaTeX/math symbols ($...$) exactly.
+-Return ONLY valid JSON array. No markdown, no wrappers.
+-Raw exam text:
 
-Exam text to parse:
-${docText}
-        `;
+
+${docText} `;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
