@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Converter Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+
+    <button class="hamburger" id="hamburger">☰</button>
+
+    <nav class="sidebar" id="sidebar">
+        <a href="#" onclick="showSection('converter')">Converter</a>
+        <a href="#" onclick="showSection('about')">About Me</a>
+        <a href="#" onclick="showSection('donate')">Donate</a>
+    </nav>
+
+    <main class="container">
+        
+        <section id="converter" class="page active">
+            <h1>Exam Converter</h1>
+            <p class="subtitle">Convert your Word documents to JSON instantly.</p>
+            
+            <div class="clean-card">
+                <input type="file" id="file-upload" accept=".docx" hidden>
+                <button class="upload-btn" onclick="document.getElementById('file-upload').click()">Browse Word File</button>
+                <p id="file-name-display" class="file-status">No file selected</p>
+            </div>
+        </section>
+
+        <section id="about" class="page">
+            <h1>About Me</h1>
+            <div class="clean-card about-card">
+                <img src="yoni.jpg" alt="Profile" class="profile-pic">
+                <p>Hello! I am Yonatan, the creator of this tool. I build solutions to make education and testing simpler.</p>
+                <div class="contact">
+                    <p>📧 yonatanwondimu92@gmail.com</p>
+                    <p>📞 +251 993623394</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="donate" class="page">
+            <h1>Support My Work</h1>
+            <div class="clean-card donate-card">
+                <p>If this tool helped your exam prep, please consider supporting the project!</p>
+                
+                <div class="bank-card">
+                    <img src="awash.png" alt="Awash Bank" class="bank-logo">
+                    <div class="bank-info">
+                        <strong>Awash Bank</strong>
+                        <p>1234567890123</p>
+                    </div>
+                </div>
+
+                <div class="bank-card">
+                    <img src="telebirr.png" alt="Telebirr" class="bank-logo">
+                    <div class="bank-info">
+                        <strong>Telebirr</strong>
+                        <p>+251 900 000 000</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="download-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="close-modal">&times;</span>
+            <h2>Conversion Successful!</h2>
+            <p>Your exam is ready. Name your file below.</p>
+            <input type="text" id="filename-input" placeholder="e.g., Biology_Midterm">
+            <button id="download-btn" class="upload-btn success-btn">Download JSON</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
