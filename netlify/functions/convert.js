@@ -9,40 +9,50 @@ exports.handler = async (event, context) => {
         const { docText } = JSON.parse(event.body);
         if (!docText) throw new Error("No document text provided.");
 
-        // Use the new variable name
         const apiKey = process.env.GROQ_API_KEY; 
-        if (!apiKey) throw new Error("GROQ_API_KEY is not set in Netlify settings!");
+        if (!apiKey) throw new Error("GROQ_API_KEY is not set!");
 
         const groq = new Groq({ apiKey: apiKey });
 
-        const prompt = `You are an expert exam converter. Convert this raw text into a valid JSON array of question objects.
-
-Schema required:
-[
-  {
-    "question": "Exact question text",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "answer": "Exact text of correct option"
-  }
-]
-
-Raw text to convert:
-${docText}`;
+        const prompt = `
+        You are an expert Educational Content Engineer. Parse the provided exam text into a strict JSON structure.
+        
+        RULES:
+        1. If the text has reading passages, include the full text of the passage in the "passage" field. If the question is standalone, set "passage" to null.
+        2. Assign a sequential "id" to every question.
+        3. Options MUST be a key-value object where keys are "A", "B", "C", "D".
+        4. "correctOption" should only be the letter (e.g., "A").
+        5. Return ONLY valid JSON.
+        
+        Schema:
+        {
+          "examTitle": "String",
+          "questions": [
+            {
+              "id": Number,
+              "passage": "String or null",
+              "questionText": "String",
+              "options": { "A": "String", "B": "String", "C": "String", "D": "String" },
+              "correctOption": "A" | "B" | "C" | "D"
+            }
+          ]
+        }
+        
+        Exam text to parse:
+        ${docText}
+        `;
 
         const chatCompletion = await groq.chat.completions.create({
             messages: [{ role: "user", content: prompt }],
             model: "llama-3.3-70b-versatile",
-            response_format: { type: "json_object" } 
+            response_format: { type: "json_object" },
+            temperature: 0.1
         });
-
-        // The response format from Groq with JSON object mode is a bit different
-        // It returns a JSON string in the content
-        const output = chatCompletion.choices[0].message.content;
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: output
+            body: chatCompletion.choices[0].message.content
         };
 
     } catch (error) {
