@@ -7,53 +7,42 @@ exports.handler = async (event, context) => {
 
     try {
         const { docText } = JSON.parse(event.body);
-        if (!docText) throw new Error("No document text was sent to the server.");
+        if (!docText) throw new Error("No document text was sent.");
 
         const apiKey = process.env.GOOGLE_API_KEY;
-        if (!apiKey) throw new Error("API key is missing in Netlify environment variables.");
-
-        // Initialize the official Google SDK
         const genAI = new GoogleGenerativeAI(apiKey);
         
-        // UPDATED: Using the current active model
-        const model = genAI.getGenerativeModel({ 
-            model: "gemini-2.0-flash"
-        });
+        // Use 1.5-flash if you are strictly on the Free Tier to avoid 429s
+        // If you need 2.0-flash, you MUST enable billing in Google AI Studio
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const prompt = `You are an expert exam converter. Convert the following raw text extracted from an exam document into a clean, well-structured JSON array of question objects. 
+        const prompt = `Convert the following text to a JSON array of questions:
+        [{"question": "...", "options": ["A", "B", "C", "D"], "answer": "..."}]
+        Text: ${docText}`;
 
-Schema required:
-[
-  {
-    "question": "Exact question text",
-    "options": ["Option A", "Option B", "Option C", "Option D"],
-    "answer": "Exact text of correct option"
-  }
-]
-
-Return ONLY valid JSON. No markdown, no backticks.
-Raw exam text:
-${docText}`;
-
-        // Call the API
         const result = await model.generateContent(prompt);
         let output = result.response.text();
-        
-        // Strip markdown if Gemini includes it
         output = output.replace(/```json/g, '').replace(/```/g, '').trim();
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(JSON.parse(output))
+            body: output
         };
 
     } catch (error) {
         console.error("Backend Error:", error.message);
+        
+        // Specifically detect Quota limits
+        const status = error.message.includes("429") ? 429 : 500;
+        const message = error.message.includes("429") 
+            ? "API Quota exceeded. Please enable billing in Google AI Studio or wait." 
+            : error.message;
+
         return {
-            statusCode: 500,
+            statusCode: status,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ error: message })
         };
     }
 };
