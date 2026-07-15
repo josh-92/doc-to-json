@@ -8,12 +8,12 @@ async function callGroq(groq, prompt) {
         model: "llama-3.3-70b-versatile",
         response_format: { type: "json_object" },
         temperature: 0.1,
-        // CRITICAL FIX: no max_tokens was set before, so long/dense batches
-        // (lots of LaTeX, long option text) could hit the default output cap
-        // mid-object. That produces truncated JSON -> JSON.parse throws ->
-        // the whole batch (and, in the old frontend loop, every batch after it)
-        // was lost. 8000 gives a 20-question batch plenty of headroom.
-        max_tokens: 8000
+        // Groq's free/on-demand tier caps at 12,000 tokens PER MINUTE, total,
+        // across prompt + reserved completion. 8000 was too generous and, on
+        // its own, could exceed the whole per-minute budget for one request.
+        // 4000 leaves room for the prompt + a ~6-8 question batch and still
+        // fits comfortably under the cap.
+        max_tokens: 4000
     });
 
     const rawOutput = chatCompletion.choices[0].message.content;
@@ -155,10 +155,14 @@ Return the COMPLETE JSON again, including every one of those question numbers th
 
     } catch (error) {
         console.error("Groq Error:", error);
+        const isRateLimit =
+            error?.status === 413 ||
+            error?.status === 429 ||
+            /rate_limit_exceeded/i.test(error.message || "");
         return {
-            statusCode: 500,
+            statusCode: isRateLimit ? 429 : 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ error: error.message, rateLimited: isRateLimit })
         };
     }
 };
