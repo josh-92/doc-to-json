@@ -1,48 +1,22 @@
 const Groq = require("groq-sdk");
 
-// Calls Groq once and returns the parsed { questions: [...] } object.
-// Throws if the response isn't valid JSON (e.g. truncated mid-generation).
-async function callGroq(groq, prompt) {
-    const chatCompletion = await groq.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: "llama-3.3-70b-versatile",
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-        // Groq's free/on-demand tier caps at 12,000 tokens PER MINUTE, total,
-        // across prompt + reserved completion. 8000 was too generous and, on
-        // its own, could exceed the whole per-minute budget for one request.
-        // 4000 leaves room for the prompt + a ~6-8 question batch and still
-        // fits comfortably under the cap.
-        max_tokens: 4000
-    });
-
-    const rawOutput = chatCompletion.choices[0].message.content;
-
-    // finish_reason tells us if Groq cut the response short even before we
-    // try to parse it — much more useful than waiting for JSON.parse to fail.
-    const finishReason = chatCompletion.choices[0].finish_reason;
-    if (finishReason === "length") {
-        throw new Error("TRUNCATED: model hit max_tokens before finishing.");
-    }
-
-    return JSON.parse(rawOutput); // may throw SyntaxError on malformed JSON
-}
-
 exports.handler = async (event, context) => {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
     try {
-        const { docText, expectedNumbers } = JSON.parse(event.body);
+        const { docText } = JSON.parse(event.body);
         if (!docText) throw new Error("No document text provided.");
 
-        const apiKey = process.env.GROQ_API_KEY;
+        const apiKey = process.env.GROQ_API_KEY; 
         if (!apiKey) throw new Error("GROQ_API_KEY is not set!");
 
         const groq = new Groq({ apiKey: apiKey });
 
-        const basePrompt = `
+        // Notice the JSON STRUCTURE requires a wrapper object {"questions": [...]} 
+        // because response_format: { type: "json_object" } strictly requires a root object.
+        const prompt = `
         You are an expert Exam Parsing Engine. Convert the following raw exam text into a strict JSON format.
 
 RULES FOR CLASSIFICATION:
@@ -79,90 +53,38 @@ IMPORTANT:
 - Return ONLY valid JSON.
 - Ensure every question object has the "question_number" field.
 
-CRITICAL INSTRUCTION: You must process EVERY SINGLE question provided in the input text.
-        Do not skip any questions, do not summarize, and do not omit questions to save space.
+CRITICAL INSTRUCTION: You must process EVERY SINGLE question provided in the input text. 
+        Do not skip any questions, do not summarize, and do not omit questions to save space. 
         If there are 20 questions in this batch, I expect 20 questions in the JSON output.
 ${docText}
         `;
 
-        let parsedJson;
-        let usedRetry = false;
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "llama-3.3-70b-versatile",
+            response_format: { type: "json_object" },
+            temperature: 0.1
+        });
 
-        try {
-            parsedJson = await callGroq(groq, basePrompt);
-        } catch (firstError) {
-            // One retry on truncation/malformed JSON before giving up on the batch.
-            console.warn("First attempt failed, retrying once:", firstError.message);
-            usedRetry = true;
-            parsedJson = await callGroq(groq, basePrompt);
-        }
-
-        let questionsArray = parsedJson.questions || [];
-
-        // Validation pass: if the frontend told us which question numbers it
-        // expected in this batch, check for gaps. If any are missing, ask the
-        // model specifically for the missing ones instead of silently
-        // returning a partial batch.
-        if (Array.isArray(expectedNumbers) && expectedNumbers.length > 0) {
-            const returnedNumbers = new Set(
-                questionsArray
-                    .filter(q => q.type === "question")
-                    .map(q => q.question_number)
-            );
-            const missing = expectedNumbers.filter(n => !returnedNumbers.has(n));
-
-            if (missing.length > 0 && !usedRetry) {
-                console.warn("Missing question numbers, requesting them explicitly:", missing);
-                const followUpPrompt = `
-${basePrompt}
-
-NOTE: Your previous attempt on this exact text omitted question number(s): ${missing.join(", ")}.
-Return the COMPLETE JSON again, including every one of those question numbers this time. Do not omit any question.
-                `;
-                try {
-                    const retryJson = await callGroq(groq, followUpPrompt);
-                    const retryQuestions = retryJson.questions || [];
-                    // Merge: keep original results, fill in any that were missing.
-                    const merged = [...questionsArray];
-                    for (const q of retryQuestions) {
-                        if (q.type === "question" && missing.includes(q.question_number)) {
-                            merged.push(q);
-                        }
-                    }
-                    questionsArray = merged;
-                } catch (retryErr) {
-                    console.warn("Follow-up retry for missing questions also failed:", retryErr.message);
-                    // fall through and return what we have, plus a warning field
-                }
-            }
-        }
-
-        // Recompute what's still missing so the frontend can report it accurately
-        // instead of silently dropping questions from the final file.
-        let stillMissing = [];
-        if (Array.isArray(expectedNumbers) && expectedNumbers.length > 0) {
-            const finalReturned = new Set(
-                questionsArray.filter(q => q.type === "question").map(q => q.question_number)
-            );
-            stillMissing = expectedNumbers.filter(n => !finalReturned.has(n));
-        }
+        // Parse Groq's output
+        const rawOutput = chatCompletion.choices[0].message.content;
+        const parsedJson = JSON.parse(rawOutput);
+        
+        // Extract the array to send back a flat list to the frontend
+        const questionsArray = parsedJson.questions || [];
 
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questions: questionsArray, missing: stillMissing })
+            body: JSON.stringify(questionsArray)
         };
 
     } catch (error) {
         console.error("Groq Error:", error);
-        const isRateLimit =
-            error?.status === 413 ||
-            error?.status === 429 ||
-            /rate_limit_exceeded/i.test(error.message || "");
         return {
-            statusCode: isRateLimit ? 429 : 500,
+            statusCode: 500,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ error: error.message, rateLimited: isRateLimit })
+            body: JSON.stringify({ error: error.message })
         };
     }
 };
