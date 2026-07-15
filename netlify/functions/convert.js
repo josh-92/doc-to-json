@@ -53,7 +53,9 @@ IMPORTANT:
 - Return ONLY valid JSON.
 - Ensure every question object has the "question_number" field.
 
-Raw exam text:
+CRITICAL INSTRUCTION: You must process EVERY SINGLE question provided in the input text. 
+        Do not skip any questions, do not summarize, and do not omit questions to save space. 
+        If there are 20 questions in this batch, I expect 20 questions in the JSON output.
 ${docText}
         `;
 
